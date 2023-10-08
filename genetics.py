@@ -11,6 +11,8 @@ MutationType = Enum('Mutation', ['AddGene', 'DeleteGene', 'MutateGene', 'Duplica
 ScoringTypes = Enum("ScoringType", ["TotalDistance", "DistanceFromTarget", 
                                     "DistanceMinusGenomeLength", "TotalDistanceWithGenomePenalty",
                                     "DistanceToTargetPlusDistanceBonus"])
+
+### CONFIG ####
 GRID_DIM = 40
 START_CHAR = "O"
 TARGET_CHAR = "X"
@@ -28,14 +30,16 @@ GENOME_LENGTH_BONUS = 3
 DISTANCE_TRAVELED_BONUS = 3
 
 class Genome:
+    # holds a list of genes
     genes: List 
 
     def __init__(self, genes = None):
-
+        # if not provided with a gene list, randomizes a genome
         if genes is None:
             self.genes = []
             for i in range(0, STARTING_GENOME_SIZE):
                 self.genes.append(Gene())
+        # otherwise, uses provided list
         else:
             self.genes = genes
 
@@ -47,12 +51,14 @@ class Genome:
         return(s)
     
     def mutate(self):
+        # handles mutation event
+
         new_gene_list = copy.deepcopy(self.genes)
         # pick mutation class 
         mutation_type = random.choice(list(MutationType))
         if mutation_type == MutationType.AddGene:
             if len(new_gene_list) >= MAX_GENOME_SIZE:
-                pass
+                pass # nothing happens, genome is max size
             else:
                 added_gene = Gene() # random gene
                 new_gene_list.append(added_gene)
@@ -75,6 +81,7 @@ class Genome:
         return(Genome(genes=new_gene_list))
 
 class Position:
+    # class to contain info about a point on a grid
     x: int
     y: int 
     has_been_passed: bool
@@ -92,7 +99,8 @@ class Position:
             return True 
         else: 
             return False
-        
+
+    # given a chance in x and y, calculate coordinates of new position 
     def calc_new_coords(self, x=0, y=0):
         new_x = self.x + x
         new_y = self.y + y
@@ -105,12 +113,16 @@ class Position:
     
         return(new_x, new_y)
     
+    # calculate distance between 2 positions
     def distance_from(self, other_position):
         return math.dist(
             (self.x, self.y),
             (other_position.x, other_position.y)
         )
+    
 class Screen:
+    # class to hold Positions in a grid
+    # grid is toroidal
     target: Position
     start: Position
     grid: Dict
@@ -137,6 +149,7 @@ class Screen:
         self.grid = grid
 
 
+    # use configured symbols to draw ASCII picture of path
     def draw_with_crawler_path(self, crawler = None):
         for i in range(0, GRID_DIM):
             row_string = ""
@@ -156,6 +169,7 @@ class Screen:
             print(row_string)
 
 class Crawler:
+    # an organism with a genome. moves over a grid.
     genome: Genome
     position: Position
     grid: Screen
@@ -193,16 +207,19 @@ class Crawler:
         self.grid = Screen(target = TARGET_POSITION, start = START_POSITION)
 
     def mutate(self):
+        # use genome to generate a child genome with a single, random mutation
         new_genome = self.genome.mutate()
 
         baby = Crawler(genome = new_genome, parent = self)
         return(baby)
     
     def draw_path(self):
+        # call grid to draw path
         self.grid.draw_with_crawler_path(self)
         self.reset()
 
     def score_self(self, method):
+        # score Crawler based on configured scoring type
         if method == ScoringTypes.TotalDistance:
             score = self.distance_traveled
         elif method == ScoringTypes.DistanceFromTarget:
@@ -218,15 +235,17 @@ class Crawler:
         self.score = score
         return(score)
         
-
+# config for start & target positions
 TARGET_POSITION = Position(20, 20)
 START_POSITION = Position(2, 2)
 
 class Gene:
+    # class to hold a gene. has a direction & a distance
     instruction: GeneInstruction
     distance: int
 
     def __init__(self, instruction=None, distance=None):
+        # if no arguments are provided, randomize a gene
         if instruction is None: # randomize
             instruction = random.choice(list(GeneInstruction))
         if distance is None:
@@ -236,6 +255,7 @@ class Gene:
         self.distance = distance
 
     def mutate(self):
+        # mutate random.
         rand1 = random.random()
         rand2 = random.random()
         if rand1 > 0.5:
@@ -250,6 +270,7 @@ class Gene:
             self.instruction = random.choice(list(GeneInstruction))
 
     def act_on_position(self, position: Position):
+        # given a position, calculates effect of gene on that position
         position_list = []
 
         for i in range(0, self.distance):
@@ -305,23 +326,29 @@ def main():
                 best = crawler.score
                 best_crawler = crawler
         
+        # act again so we can draw the path of the winner on the screen
         best_crawler.act()
         best_crawler.draw_path()
         best_crawler.reset()
+
+        # print some info about the winner
         print(f"best score is {best_crawler.score}")
         print(f"with a genome of {best_crawler.genome}")
         print(f"final position: {best_crawler.position}")
 
-        time.sleep(1)
+        # sleep so screen is human readable
+        time.sleep(SLEEP_TIME)
 
+        # clear screen if this is not the last generation
         if not i == TOTAL_GENERATIONS-1:
             os.system('clear')
 
-        #grid.draw_with_crawler_path(best_crawler)
-
+        # save the best crawler for future reference
         bests[i] = best_crawler
 
         # mutate children
+        # but include this gen's winner in next gene
+        # (guess he cloned himself)
         generations[i+1] = [Crawler(genome=best_crawler.genome)]
         for n in range(0, GENERATION_SIZE - 1):
             child = best_crawler.mutate()
